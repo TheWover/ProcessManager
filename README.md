@@ -1,5 +1,7 @@
 # ProcessManager
-ps-like .NET Assembly for enumerating processes on the current machine or a remote machine.
+ps-like .NET Assembly for enumerating processes on the current machine or a remote machine. Has the unique feature of telling you whether each process is managed (has the CLR loaded). Compatibly with .NET v3.5.
+
+All enumeration is done with only built-in .NET APIs and PInvoke, rather than any third-party libraries or usage of WMI.
 
 ![Alt text](https://github.com/TheWover/ProcessManager/blob/master/img/usage.JPG?raw=true "General Usage")
 
