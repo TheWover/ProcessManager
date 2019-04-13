@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.ComponentModel;
 using System.Security.Principal;
-using System.Management;
 
 namespace ProcessManager
 {
