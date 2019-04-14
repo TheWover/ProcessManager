@@ -38,7 +38,7 @@ namespace ProcessManager
                     Environment.Exit(0);
                 }
 
-                Console.WriteLine("{0,-30} {1,-15} {2,-15} {3,-15} {4,-15} {5,-15} {6}", "Process Name", "PID", "PPID", "Arch", "Managed", "Session", "User");
+                Console.WriteLine("{0,-30} {1,-10} {2,-10} {3,-10} {4,-10} {5,-10} {6,-10} {7}", "Process Name", "PID", "PPID", "Arch", "Managed", "Session", "Integrity", "User");
 
                 //If the user specifed that a different machine should be used, then parse for the machine name and run the command.
                 if (arguments.machinename != null)
@@ -74,7 +74,7 @@ namespace ProcessManager
             }
             else
             {
-                Console.WriteLine("{0,-30} {1,-15} {2,-15} {3,-15} {4,-15} {5,-15} {6}", "Process Name", "PID", "PPID", "Arch", "Managed", "Session", "User");
+                Console.WriteLine("{0,-30} {1,-10} {2,-10} {3,-10} {4,-10} {5,-10} {6,-10} {7}", "Process Name", "PID", "PPID", "Arch", "Managed", "Session", "Integrity" , "User");
 
                 DescribeProcesses(Process.GetProcesses());
             }
@@ -153,25 +153,35 @@ namespace ProcessManager
 
         private static void DescribeProcesses(Process[] processes)
         {
-            //
+            
+            //Sort in ascending order by PID
             processes = processes.OrderBy(p => p.Id).ToArray();
 
             foreach (Process process in processes)
             {
-
+                //Get the PID
                 ProcessDetails details = new ProcessDetails();
                 details.name = process.ProcessName;
                 details.pid = process.Id;
 
-
-
-                Process parent = ParentProcessUtilities.GetParentProcess(process.Id);
-                if (parent != null)
-                    details.ppid = parent.Id;
-                else
-                    details.ppid = -1;
-
                 try
+                { 
+                    //Get the PPID
+                    Process parent = ParentProcessUtilities.GetParentProcess(process.Id);
+                    if (parent != null)
+                        details.ppid = parent.Id;
+                    else
+                        details.ppid = -1;
+                }
+                //Parent is no longer running
+                catch (InvalidOperationException)
+                {
+                    details.ppid = -1;
+                }
+
+
+            //Check the architecture
+            try
                 {
                     if (ProcessInspector.IsWow64Process(process))
                         details.arch = "x64";
@@ -183,14 +193,54 @@ namespace ProcessManager
                     details.arch = "*";
                 }
 
-                //Determine whether or not the process is managed (has the CLR loaded).
-                details.managed = ProcessInspector.IsCLRLoaded(process);
+                try
+                {
+                    //Determine whether or not the process is managed (has the CLR loaded).
+                    details.managed = ProcessInspector.IsCLRLoaded(process);
+                }
+                //Process is no longer running
+                catch (InvalidOperationException)
+                {
+                    details.managed = false;
+                }
 
-                details.session = process.SessionId;
 
-                details.user = ProcessInspector.GetProcessUser(process);
+                try
+                {
+                    //Gets the Session of the Process
+                    details.session = process.SessionId;
+                }
+                //Process is no longer running
+                catch (InvalidOperationException)
+                {
+                    details.session = -1;
+                }
 
-                Console.WriteLine("{0,-30} {1,-15} {2,-15} {3,-15} {4,-15} {5,-15} {6}", details.name, details.pid, details.ppid, details.arch, details.managed, details.session, details.user);
+
+                try
+                {
+                    //Gets the Integrity Level of the process
+                    details.integrity = TokenInspector.GetIntegrityLevel(process);
+                }
+                //Process is no longer running
+                catch (InvalidOperationException)
+                {
+                    details.integrity = TokenInspector.IntegrityLevel.Unknown;
+                }
+
+
+                try
+                {
+                    //Gets the User of the Process
+                    details.user = ProcessInspector.GetProcessUser(process);
+                }
+                //Process is no longer running
+                catch (InvalidOperationException)
+                {
+                    details.user = "";
+                }
+
+                Console.WriteLine("{0,-30} {1,-10} {2,-10} {3,-10} {4,-10} {5,-10} {6,-10} {7}", details.name, details.pid, details.ppid, details.arch, details.managed, details.session, details.integrity, details.user);
             }
         }
     }
@@ -203,6 +253,7 @@ namespace ProcessManager
         public string arch;
         public bool managed;
         public int session;
+        public TokenInspector.IntegrityLevel integrity;
         public string user;
     }
 
@@ -391,6 +442,139 @@ namespace ProcessManager
                 // not found
                 return null;
             }
+        }
+    }
+
+    /// <summary>
+    /// Inspects the tokens of an arbitrary Process and reports useful information.
+    /// 
+    /// This class is almost entirely copied from the example provided by pinvoke.net:
+    /// http://pinvoke.net/default.aspx/Constants/SECURITY_MANDATORY.html
+    /// </summary>
+    public class TokenInspector
+    {
+        [DllImport("advapi32.dll", SetLastError = true)]
+        static extern IntPtr GetSidSubAuthority(IntPtr sid, UInt32 subAuthorityIndex);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        static extern IntPtr GetSidSubAuthorityCount(IntPtr sid);
+
+        // winnt.h, Windows SDK v6.1
+        const int SECURITY_MANDATORY_UNTRUSTED_RID = (0x00000000);
+        const int SECURITY_MANDATORY_LOW_RID = (0x00001000);
+        const int SECURITY_MANDATORY_MEDIUM_RID = (0x00002000);
+        const int SECURITY_MANDATORY_HIGH_RID = (0x00003000);
+        const int SECURITY_MANDATORY_SYSTEM_RID = (0x00004000);
+        const int SECURITY_MANDATORY_PROTECTED_PROCESS_RID = (0x00005000);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool OpenProcessToken(
+            IntPtr ProcessHandle,
+            UInt32 DesiredAccess,
+            out IntPtr TokenHandle
+            );
+
+        const UInt32 TOKEN_QUERY = 0x0008;
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        static extern bool GetTokenInformation(
+            IntPtr TokenHandle,
+            TOKEN_INFORMATION_CLASS TokenInformationClass,
+            IntPtr TokenInformation,
+            uint TokenInformationLength,
+            out uint ReturnLength
+            );
+
+        enum TOKEN_INFORMATION_CLASS
+        {
+            TokenUser = 1, TokenGroups, TokenPrivileges, TokenOwner, TokenPrimaryGroup, TokenDefaultDacl, TokenSource, TokenType, TokenImpersonationLevel, TokenStatistics, TokenRestrictedSids, TokenSessionId, TokenGroupsAndPrivileges, TokenSessionReference, TokenSandBoxInert, TokenAuditPolicy, TokenOrigin, TokenElevationType, TokenLinkedToken, TokenElevation, TokenHasRestrictions, TokenAccessInformation, TokenVirtualizationAllowed, TokenVirtualizationEnabled,
+
+            /// <summary>
+            /// The buffer receives a TOKEN_MANDATORY_LABEL structure that specifies the token's integrity level. 
+            /// </summary>
+            TokenIntegrityLevel,
+
+            TokenUIAccess, TokenMandatoryPolicy, TokenLogonSid, MaxTokenInfoClass
+        }
+
+        public enum IntegrityLevel
+        {
+            Low, Medium, High, System, None, Unknown
+        }
+
+        const int ERROR_INVALID_PARAMETER = 87;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool CloseHandle(IntPtr hHandle);
+
+
+        public static IntegrityLevel GetIntegrityLevel(Process process)
+        {
+            try
+            {
+                IntPtr pId = (process.Handle);
+
+                IntPtr hToken = IntPtr.Zero;
+                if (OpenProcessToken(pId, TOKEN_QUERY, out hToken))
+                {
+                    try
+                    {
+                        IntPtr pb = Marshal.AllocCoTaskMem(1000);
+                        try
+                        {
+                            uint cb = 1000;
+                            if (GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenIntegrityLevel, pb, cb, out cb))
+                            {
+                                IntPtr pSid = Marshal.ReadIntPtr(pb);
+
+                                int dwIntegrityLevel = Marshal.ReadInt32(GetSidSubAuthority(pSid, (Marshal.ReadByte(GetSidSubAuthorityCount(pSid)) - 1U)));
+
+                                if (dwIntegrityLevel == SECURITY_MANDATORY_LOW_RID)
+                                {
+                                    return IntegrityLevel.Low;
+                                }
+                                else if (dwIntegrityLevel >= SECURITY_MANDATORY_MEDIUM_RID && dwIntegrityLevel < SECURITY_MANDATORY_HIGH_RID)
+                                {
+                                    // Medium Integrity
+                                    return IntegrityLevel.Medium;
+                                }
+                                else if (dwIntegrityLevel >= SECURITY_MANDATORY_HIGH_RID)
+                                {
+                                    // High Integrity
+                                    return IntegrityLevel.High;
+                                }
+                                else if (dwIntegrityLevel >= SECURITY_MANDATORY_SYSTEM_RID)
+                                {
+                                    // System Integrity
+                                    return IntegrityLevel.System;
+                                }
+                                return IntegrityLevel.None;
+                            }
+                            else
+                            {
+                                return IntegrityLevel.Unknown;
+                            }
+                        }
+                        finally
+                        {
+                            Marshal.FreeCoTaskMem(pb);
+                        }
+                    }
+                    finally
+                    {
+                        CloseHandle(hToken);
+                        
+                    }
+                }
+            }
+            catch (Win32Exception ex)
+            {
+                return IntegrityLevel.Unknown;
+            }
+
+            //If we made it this far through all of the finally blocks and didn't return, then return unknown
+            return IntegrityLevel.Unknown;
         }
     }
 }
