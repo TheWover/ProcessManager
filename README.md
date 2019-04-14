@@ -14,7 +14,7 @@ All enumeration is done with only built-in .NET APIs and PInvoke, rather than an
 # Usage
 
 ```
-| Process Manager [v0.1]  
+| Process Manager [v0.2]  
 | Copyright (c) 2019 TheWover
 
 Usage: ProcessManager.exe [options] 

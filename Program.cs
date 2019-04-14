@@ -129,7 +129,7 @@ namespace ProcessManager
         private static void PrintUsage()
         {
             Console.WriteLine();
-            Console.WriteLine("| Process Manager [v0.1]");
+            Console.WriteLine("| Process Manager [v0.2]");
             Console.WriteLine("| Copyright (c) 2019 TheWover");
             Console.WriteLine();
 
@@ -184,9 +184,9 @@ namespace ProcessManager
             try
                 {
                     if (ProcessInspector.IsWow64Process(process))
-                        details.arch = "x64";
-                    else
                         details.arch = "x86";
+                    else
+                        details.arch = "x64";
                 }
                 catch
                 {
@@ -263,7 +263,6 @@ namespace ProcessManager
         [System.Runtime.InteropServices.DllImport("kernel32.dll")]
         public static extern bool IsWow64Process(System.IntPtr hProcess, out bool lpSystemInfo);
 
-
         [DllImport("ntdll.dll")]
         private static extern int NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, ref ParentProcessUtilities processInformation, int processInformationLength, out int returnLength);
 
@@ -305,7 +304,7 @@ namespace ProcessManager
         /// <summary>
         /// Checks whether the process is 64-bit.
         /// </summary>
-        /// <returns>Returns true if process is 64-bit, and false if process is 32-bit.</returns>
+        /// <returns>Returns false if process is 64-bit, and true if process is 32-bit. Refer to MSDN for further details.</returns>
         public static bool IsWow64Process()
         {
             bool retVal = false;
