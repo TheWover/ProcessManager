@@ -1,4 +1,12 @@
-﻿using System;
+﻿/** Name: ProcessManager
+ * Author: TheWover
+ * Description: Displays useful information about processes running on a local or remote machine.
+ * 
+ * Last Modified: 04/13/2018
+ * 
+ */
+
+using System;
 using System.Linq;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -10,13 +18,21 @@ namespace ProcessManager
 
     class Program
     {
+        private struct Arguments
+        {
+            public string processname;
+            public string machinename;
+            public bool help;
+        }
 
         static void Main(string[] args)
         {
+            //Parse command-line arguments
+            Arguments arguments = ParseArgs(args);
 
             if (args.Length > 0)
             {
-                if (args.Contains("--help") || args.Contains("-h"))
+                if (arguments.help == true)
                 {
                     PrintUsage();
                     Environment.Exit(0);
@@ -24,16 +40,37 @@ namespace ProcessManager
 
                 Console.WriteLine("{0,-30} {1,-15} {2,-15} {3,-15} {4,-15} {5,-15} {6}", "Process Name", "PID", "PPID", "Arch", "Managed", "Session", "User");
 
-                try
+                //If the user specifed that a different machine should be used, then parse for the machine name and run the command.
+                if (arguments.machinename != null)
                 {
-                    DescribeProcesses(Process.GetProcesses(args[0]));
-                }
-                catch
-                {
-                    Console.WriteLine("Error: Invalid machine name.");
+                    try
+                    {
+                        if (arguments.processname != null)
+                            
+                            //Enumerate the processes
+                            DescribeProcesses(Process.GetProcessesByName(arguments.processname, arguments.machinename));
+                        else
 
-                    Environment.Exit(1);
+                            //Enumerate the processes
+                            DescribeProcesses(Process.GetProcesses(arguments.machinename));
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Error: Invalid machine name.");
+
+                        Environment.Exit(1);
+                    }
                 }
+                else
+                {
+                    if (arguments.processname != null)
+                        //Enumerate the processes
+                        DescribeProcesses(Process.GetProcessesByName(arguments.processname));
+                    else
+                        //Enumerate the processes
+                        DescribeProcesses(Process.GetProcesses());
+                }
+                
             }
             else
             {
@@ -41,6 +78,52 @@ namespace ProcessManager
 
                 DescribeProcesses(Process.GetProcesses());
             }
+        }
+
+        private static Arguments ParseArgs(string[] args)
+        {
+            Arguments arguments = new Arguments();
+            arguments.help = false;
+            arguments.machinename = null;
+            arguments.processname = null;
+
+            if (args.Length > 0)
+            {
+                if (args.Contains("--help") || args.Contains("-h"))
+                {
+                    arguments.help = true;
+                }
+            }
+
+            //Filter by process name
+            if (args.Contains("--name") && args.Length >= 2)
+            {
+                //The number of the command line argument that specifies the process name
+                int nameindex = new System.Collections.Generic.List<string>(args).IndexOf("--name") + 1;
+
+                arguments.processname = args[nameindex];
+            }
+
+            //If the user specifed that a different machine should be used, then parse for the machine name and run the command.
+            if (args.Contains("--machine") && args.Length >= 2)
+            {
+                try
+                {
+                    //The number of the command line argument that specifies the machine name
+                    int machineindex = new System.Collections.Generic.List<string>(args).IndexOf("--machine") + 1;
+
+                    arguments.machinename = args[machineindex];
+                }
+                catch
+                {
+                    Console.WriteLine("Error: Invalid machine name.");
+
+                    Environment.Exit(1);
+                }
+
+            }
+
+            return arguments;
         }
 
         private static void PrintUsage()
@@ -54,14 +137,17 @@ namespace ProcessManager
             Console.WriteLine();
 
             Console.WriteLine("{0,-5} {1,-20} {2}", "", "-h, --help", "Display this help menu.");
+            Console.WriteLine("{0,-5} {1,-20} {2}", "", "--machine", "Specify a machine to query. Machine name or IP Address may be used.");
+            Console.WriteLine("{0,-5} {1,-20} {2}", "", "--name", "Filter by a process name.");
             Console.WriteLine();
 
             Console.WriteLine("Examples:");
             Console.WriteLine();
 
             Console.WriteLine("ProcessManager.exe");
-            Console.WriteLine("ProcessManager.exe workstation2");
-            Console.WriteLine("ProcessManager.exe 10.30.134.13");
+            Console.WriteLine("ProcessManager.exe --name svchost");
+            Console.WriteLine("ProcessManager.exe --machine workstation2");
+            Console.WriteLine("ProcessManager.exe --machine 10.30.134.13");
             Console.WriteLine();
         }        
 

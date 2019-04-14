@@ -11,13 +11,16 @@ All enumeration is done with only built-in .NET APIs and PInvoke, rather than an
 | Process Manager [v0.1]  
 | Copyright (c) 2019 TheWover
 
-Usage: ProcessManager.exe [machine] 
+Usage: ProcessManager.exe [options] 
 
       -h, --help           Display this help menu. 
+      --machine            Specify a machine to query. Machine name or IP Address may be used.
+      --name               Filter by a process name.      
       
 Examples:  
 
 ProcessManager.exe
-ProcessManager.exe workstation2  
-ProcessManager.exe 10.30.134.13 
+ProcessManager.exe --name svchost
+ProcessManager.exe --machine workstation2  
+ProcessManager.exe --machine 10.30.134.13 
 ```
