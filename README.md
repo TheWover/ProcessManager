@@ -35,3 +35,8 @@ ProcessManager.exe --name svchost
 ProcessManager.exe --machine workstation2  
 ProcessManager.exe --machine 10.30.134.13 
 ```
+
+# TODO
+
+* Improve how ProcessManager aquires the PPID of each process to avoid needing read access to the process. Use `NtQuerySystemInformation` to get the list of processes, `NtQueryProcessInformation` to get the `PROCESSINFOCLASS` structure, from which the PPID can be found. https://www.pinvoke.net/default.aspx/Structures.PROCESS_BASIC_INFORMATION
+* Test and improve remote process enumeration functionality.
